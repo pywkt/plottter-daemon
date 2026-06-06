@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "plottter-daemon"
+version = "0.1.0"
+description = "Networked plot server for AxiDraw-compatible pen plotters (iDraw H SE). Receives SVG jobs over HTTP and drives the plotter with pyaxidraw."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+# The HTTP server uses only the Python standard library. pyaxidraw is needed to
+# actually drive hardware but is intentionally NOT a hard dependency so the
+# daemon installs/tests/runs (with --fake) without it. Install it separately:
+#   pip install https://cdn.evilmadscientist.com/dl/ad/public/AxiDraw_API.zip
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[project.scripts]
+plottter-daemon = "plottter_daemon.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["plottter_daemon*"]

@@ -1,0 +1,29 @@
+# systemd unit for the plot daemon.
+#
+# Install on the Pi:
+#   sudo cp deploy/plottter-daemon.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now plottter-daemon
+#
+# Edit User, WorkingDirectory, the python path, and the --token/--device-name to
+# match your setup. The plot continues even if the laptop disconnects because the
+# job runs inside this long-lived service, not the client connection.
+
+[Unit]
+Description=Pen plotter daemon (remote plotting for Plottter)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/plottter-daemon
+# Use the venv python that has pyaxidraw installed.
+ExecStart=/home/pi/plottter-daemon/.venv/bin/python -m plottter_daemon --port 8080 --device-name "iDraw H SE A2" --token CHANGE_ME
+Restart=on-failure
+RestartSec=3
+# Give USB serial access; the 'pi' user is usually already in 'dialout'.
+SupplementaryGroups=dialout
+
+[Install]
+WantedBy=multi-user.target
