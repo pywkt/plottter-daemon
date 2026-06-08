@@ -36,6 +36,7 @@ def main() -> None:
     ap.add_argument("--device-name", default="iDraw H SE A2")
     ap.add_argument("--serial-port", default=None, help="force a serial port (default: auto-detect)")
     ap.add_argument("--fake", action="store_true", help="simulate a plotter (no hardware)")
+    ap.add_argument("--verbose", action="store_true", help="log every HTTP request (default: only job events)")
     args = ap.parse_args()
 
     if args.no_auth:
@@ -56,7 +57,7 @@ def main() -> None:
     if args.serial_port:
         _wrap_default_port(manager, args.serial_port)
 
-    server = make_server(args.host, args.port, manager, token)
+    server = make_server(args.host, args.port, manager, token, verbose=args.verbose)
     print(f"[plottter-daemon] listening on http://{args.host}:{args.port}{API_BASE}")
     print(f"[plottter-daemon] device: {args.device_name}{'  (FAKE)' if args.fake else ''}")
     print(f"[plottter-daemon] auth: {'OPEN (no token)' if not token else 'token = ' + token}")

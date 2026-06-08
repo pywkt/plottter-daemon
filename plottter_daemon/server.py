@@ -27,14 +27,24 @@ API_VERSION = "1.0"
 _MANUAL_COMMANDS = {"raise_pen", "lower_pen", "disable_xy", "enable_xy", "walk_home"}
 
 
-def make_handler(manager: JobManager, token: Optional[str]):
-    """Build a request-handler class bound to a manager + optional token."""
+def make_handler(manager: JobManager, token: Optional[str], verbose: bool = False):
+    """Build a request-handler class bound to a manager + optional token.
+
+    By default only meaningful job events are logged. The client polls job
+    status ~twice a second during a plot, so the per-request access log is
+    suppressed unless ``verbose`` is set.
+    """
+
+    def event(msg: str) -> None:
+        print(f"[plottter-daemon] {msg}")
 
     class _Handler(BaseHTTPRequestHandler):
         server_version = "PlottterDaemon/1.0"
 
         def log_message(self, fmt, *args):
-            print(f"[plottter-daemon] {self.address_string()} {fmt % args}")
+            # Quiet by default — avoid flooding the log with status polls.
+            if verbose:
+                print(f"[plottter-daemon] {self.address_string()} {fmt % args}")
 
         # -- helpers --
 
@@ -113,6 +123,7 @@ def make_handler(manager: JobManager, token: Optional[str]):
                 job_id = manager.submit(svg, settings)
             except Busy as exc:
                 return self._send(409, {"error": str(exc)})
+            event(f"job {job_id} started")
             self._send(200, {"job_id": job_id})
 
         def _control(self, job_id: str) -> None:
@@ -127,6 +138,7 @@ def make_handler(manager: JobManager, token: Optional[str]):
                 return self._send(404, {"error": "no such job"})
             except ValueError as exc:
                 return self._send(400, {"error": str(exc)})
+            event(f"job {job_id}: {action}")
             self._send(200, {"ok": True, "action": action})
 
         def _manual(self) -> None:
@@ -145,10 +157,13 @@ def make_handler(manager: JobManager, token: Optional[str]):
                 return self._send(409, {"error": str(exc)})
             except Exception as exc:
                 return self._send(500, {"error": str(exc)})
+            event(f"manual: {command}")
             self._send(200, {"ok": True, "command": command})
 
     return _Handler
 
 
-def make_server(host: str, port: int, manager: JobManager, token: Optional[str]) -> ThreadingHTTPServer:
-    return ThreadingHTTPServer((host, port), make_handler(manager, token))
+def make_server(
+    host: str, port: int, manager: JobManager, token: Optional[str], verbose: bool = False
+) -> ThreadingHTTPServer:
+    return ThreadingHTTPServer((host, port), make_handler(manager, token, verbose))
