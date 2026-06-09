@@ -117,6 +117,31 @@ def test_pause_then_resume(server):
     assert st["state"] == "done"
 
 
+def test_stop_while_paused_frees_device(server):
+    """A paused job must be stoppable so the daemon doesn't stay busy forever."""
+    base, tok = server
+    job_id = call(base, "POST", "/jobs", {"svg": SVG, "settings": {}}, tok)[1]["job_id"]
+    time.sleep(0.1)
+    call(base, "POST", f"/jobs/{job_id}/control", {"action": "pause"}, tok)
+    for _ in range(40):
+        st = call(base, "GET", f"/jobs/{job_id}", token=tok)[1]
+        if st["state"] == "paused":
+            break
+        time.sleep(0.05)
+    assert st["state"] == "paused"
+    # Health reports busy while paused.
+    assert call(base, "GET", "/health")[1]["state"] == "paused"
+
+    # Stop the paused job -> it becomes "stopped" and the device frees up.
+    assert call(base, "POST", f"/jobs/{job_id}/control", {"action": "stop"}, tok)[0] == 200
+    st = call(base, "GET", f"/jobs/{job_id}", token=tok)[1]
+    assert st["state"] == "stopped"
+    assert call(base, "GET", "/health")[1]["state"] == "idle"
+
+    # A fresh job is now accepted instead of 409'ing.
+    assert call(base, "POST", "/jobs", {"svg": SVG, "settings": {}}, tok)[0] == 200
+
+
 def test_manual_validation_and_success(server):
     base, tok = server
     assert call(base, "POST", "/manual", {"command": "nope"}, tok)[0] == 400

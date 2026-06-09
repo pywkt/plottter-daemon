@@ -89,6 +89,9 @@ class JobManager:
         self._executor.manual(command, settings)  # outside the lock — talks to hardware
 
     def control(self, job_id: str, action: str) -> None:
+        # If we finalize a stop here (paused job, no live plot thread), lift the
+        # pen outside the lock since that talks to hardware.
+        lift_settings = None
         with self._lock:
             job = self._job
             if job is None or job["job_id"] != job_id:
@@ -99,7 +102,17 @@ class JobManager:
                     _safe_pause(handle)
             elif action == "stop":
                 job["_stop"] = True
-                if handle is not None:
+                if job["state"] == "paused":
+                    # A paused job has no live plot thread to reach the post-plot
+                    # block in _run, so it would otherwise sit in "paused"
+                    # forever — keeping the daemon busy until a restart. Finalize
+                    # the stop right here so the device is freed.
+                    job["state"] = "stopped"
+                    job["_resume_svg"] = None
+                    lift_settings = job["_settings"]
+                elif handle is not None:
+                    # Still plotting: ask it to stop at the next safe point; _run
+                    # sees _stop and transitions the job to "stopped".
                     _safe_pause(handle)
             elif action == "resume":
                 if job["state"] == "paused" and job["_resume_svg"] is not None:
@@ -114,6 +127,8 @@ class JobManager:
                     thread.start()
             else:
                 raise ValueError(f"unknown action: {action}")
+        if lift_settings is not None:
+            self._safety_lift(lift_settings)
 
     # -- worker --
 
